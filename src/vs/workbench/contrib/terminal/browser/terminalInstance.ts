@@ -1924,7 +1924,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (!this._xterm?.buffer.active) {
 			return;
 		}
-		if (this._terminalHasFixedWidth.get() === true) {
+		if (this._hasScrollBar) {
 			this._terminalHasFixedWidth.set(false);
 			this._fixedCols = undefined;
 			this._fixedRows = undefined;
@@ -1934,16 +1934,18 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this._horizontalScrollbar?.setScrollDimensions({ scrollWidth: 0 });
 		} else {
 			let maxCols = 0;
-			for (let i = this._xterm.buffer.active.viewportY; i < this._xterm.buffer.active.length; i++) {
-				const lineWidth = this._getLineWidth(i, this._xterm.buffer.active);
-				maxCols = Math.max(maxCols, lineWidth.width || 0);
-				i = lineWidth.newIndex;
+			if (!this._xterm.buffer.active.getLine(0)) {
+				return;
+			}
+			const lineWidth = this._xterm.buffer.active.getLine(0)!.length;
+			for (let i = this._xterm.buffer.active.length - 1; i >= this._xterm.buffer.active.viewportY; i--) {
+				const lineInfo = this._getWrappedLineCount(i, this._xterm.buffer.active);
+				maxCols = Math.max(maxCols, ((lineInfo.lineCount * lineWidth) - lineInfo.endSpaces) || 0);
+				i = lineInfo.currentIndex;
 			}
 			maxCols = Math.min(maxCols, Constants.MaxSupportedCols);
-			if (maxCols > this.maxCols) {
-				this._fixedCols = maxCols;
-				await this._addScrollbar();
-			}
+			this._fixedCols = maxCols;
+			await this._addScrollbar();
 		}
 		this.focus();
 	}
@@ -1951,6 +1953,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private async _addScrollbar(): Promise<void> {
 		const charWidth = this._configHelper?.getFont(this._xtermCore).charWidth;
 		if (!this._xterm?.element || !this._wrapperElement || !this._container || !charWidth || !this._fixedCols) {
+			return;
+		}
+		if (this._fixedCols < this._xterm.buffer.active.getLine(0)!.length) {
+			// no scrollbar needed
 			return;
 		}
 		this._hasScrollBar = true;
@@ -1968,11 +1974,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			}));
 			this._container.appendChild(this._horizontalScrollbar.getDomNode());
 		}
-
 		this._horizontalScrollbar.setScrollDimensions(
 			{
 				width: this._xterm.element.clientWidth,
-				scrollWidth: ((((this._fixedCols - this.maxCols) * charWidth) + this._xterm.element.clientWidth))
+				scrollWidth: this._fixedCols * charWidth
 			});
 		this._horizontalScrollbar!.getDomNode().style.paddingBottom = '16px';
 
@@ -1983,20 +1988,25 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 	}
 
-	private _getLineWidth(index: number, buffer: IBuffer): { width: number, newIndex: number } {
-		let width = 0;
+	private _getWrappedLineCount(index: number, buffer: IBuffer): { lineCount: number, currentIndex: number, endSpaces: number } {
 		let line = buffer.getLine(index);
-		let newIndex = index;
-		while (line?.isWrapped) {
-			width += line.length;
-			for (let i = 0; i < line.length; i++) {
-				const cell = line.getCell(i);
-				width += cell?.getWidth() || 0;
-			}
-			newIndex++;
-			line = buffer.getLine(newIndex);
+		if (!line) {
+			throw new Error('Could not get line');
 		}
-		return { width, newIndex };
+		let currentIndex = index;
+		let endSpaces = -1;
+		for (let i = line?.length || 0; i > 0; i--) {
+			if (line && !line?.getCell(i)?.getChars()) {
+				endSpaces++;
+			} else {
+				break;
+			}
+		}
+		while (line?.isWrapped && currentIndex > 0) {
+			currentIndex--;
+			line = buffer.getLine(currentIndex);
+		}
+		return { lineCount: index - currentIndex + 1, currentIndex, endSpaces };
 	}
 
 	private _setResolvedShellLaunchConfig(shellLaunchConfig: IShellLaunchConfig): void {
@@ -2457,8 +2467,9 @@ export class TerminalLabelComputer extends Disposable {
 			task: this._instance.shellLaunchConfig.description === 'Task' ? 'Task' : undefined,
 			separator: { label: this._configHelper.config.tabs.separator }
 		};
+		labelTemplate = labelTemplate.trim();
 		if (!labelTemplate) {
-			return this._instance.processName || '';
+			return labelType === TerminalLabelType.Title ? (this._instance.processName || '') : '';
 		}
 		if (this._instance.staticTitle && labelType === TerminalLabelType.Title) {
 			return this._instance.staticTitle.replace(/[\n\r\t]/g, '') || templateProperties.process?.replace(/[\n\r\t]/g, '') || '';
@@ -2469,8 +2480,8 @@ export class TerminalLabelComputer extends Disposable {
 		templateProperties.cwdFolder = (!templateProperties.cwd || !detection || zeroRootWorkspace || singleRootWorkspace) ? '' : path.basename(templateProperties.cwd);
 
 		//Remove special characters that could mess with rendering
-		const label = template(labelTemplate, (templateProperties as unknown) as { [key: string]: string | ISeparator | undefined | null; }).replace(/[\n\r\t]/g, '');
-		return label.trim() === '' && labelType === TerminalLabelType.Title ? (this._instance.processName || '') : label;
+		let label = template(labelTemplate, (templateProperties as unknown) as { [key: string]: string | ISeparator | undefined | null; }).replace(/[\n\r\t]/g, '').trim();
+		return label === '' && labelType === TerminalLabelType.Title ? (this._instance.processName || '') : label;
 	}
 
 	pathsEqual(path1?: string | null, path2?: string) {

@@ -1,7 +1,7 @@
 {
   "name": "code-oss-dev",
-  "version": "1.61.0",
-  "distro": "5ca6ee44005933b2a6712d871af5bbea15705d80",
+  "version": "1.62.0",
+  "distro": "bd65e0c5851c6e1a60c7f37a3688787412bd44aa",
   "author": {
     "name": "Microsoft Corporation"
   },
@@ -131,7 +131,7 @@
     "cssnano": "^4.1.11",
     "debounce": "^1.0.0",
     "deemon": "^1.4.0",
-    "electron": "13.5.0",
+    "electron": "13.5.1",
     "eslint": "6.8.0",
     "eslint-plugin-header": "3.1.1",
     "eslint-plugin-jsdoc": "^19.1.0",
@@ -198,7 +198,7 @@
     "style-loader": "^1.0.0",
     "ts-loader": "^9.2.3",
     "tsec": "0.1.4",
-    "typescript": "^4.5.0-dev.20210927",
+    "typescript": "^4.5.0-dev.20211004",
     "typescript-formatter": "7.1.0",
     "underscore": "^1.12.1",
     "util": "^0.12.4",
