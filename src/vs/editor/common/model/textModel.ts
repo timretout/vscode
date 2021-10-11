@@ -3205,6 +3205,20 @@ export class TextModel extends Disposable implements model.ITextModel, IDecorati
 			// Going backwards, so the last guide potentially replaces others
 			for (let i = activeGuides.length - 1; i >= 0; i--) {
 				const line = activeGuides[i];
+
+				const isActive = options.highlightActive && activeBracketPairRange &&
+					line.bracketPair.range.equalsRange(activeBracketPairRange);
+
+				const className =
+					colorProvider.getInlineClassNameOfLevel(line.nestingLevel) +
+					(isActive ? ' ' + colorProvider.activeClassName : '');
+
+				if (isActive || options.includeInactive) {
+					if (line.renderHorizontalEndLineAtTheBottom && line.end.lineNumber === lineNumber + 1) {
+						nextGuides.push(new model.IndentGuide(line.guideVisibleColumn, className, null));
+					}
+				}
+
 				if (line.end.lineNumber <= lineNumber
 					|| line.start.lineNumber >= lineNumber) {
 					continue;
@@ -3215,18 +3229,9 @@ export class TextModel extends Disposable implements model.ITextModel, IDecorati
 				}
 				lastVisibleColumnCount = line.guideVisibleColumn;
 
-				const isActive = options.highlightActive && activeBracketPairRange &&
-					line.bracketPair.range.equalsRange(activeBracketPairRange);
-
-				const className =
-					colorProvider.getInlineClassNameOfLevel(line.nestingLevel) +
-					(isActive ? ' ' + colorProvider.activeClassName : '');
 
 				if (isActive || options.includeInactive) {
 					guides.push(new model.IndentGuide(line.guideVisibleColumn, className, null));
-					if (line.renderHorizontalEndLineAtTheBottom && line.end.lineNumber === lineNumber + 1) {
-						nextGuides.push(new model.IndentGuide(line.guideVisibleColumn, className, null));
-					}
 				}
 			}
 
